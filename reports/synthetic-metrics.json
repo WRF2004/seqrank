@@ -1,0 +1,34 @@
+{
+  "split": "test",
+  "source_sha256": "fd78848ef0568b22bd3cfd6b92f92243644c5edbeb4817a8938876d85c6729d6",
+  "retrieval_checkpoint_sha256": "1200b97967d53f1885acf1a455891ccbd977a6af2169dccf83679827ff6c0b03",
+  "ranker_checkpoint_sha256": "b4fec5bd152c7f2b92b9772ddfe2314f0cd94057db815abfd74175cd997f3343",
+  "k": 10,
+  "candidates": 50,
+  "evaluation": "full training catalog; repeated items allowed; OOV targets count as misses",
+  "ctr": {
+    "auc_hist4096": 0.4981682562327724,
+    "logloss": 0.4850843229968149,
+    "calibration_l1_hist4096": 0.18688562449316184,
+    "count": 1500,
+    "positives": 279
+  },
+  "ctcvr": {
+    "auc_hist4096": 0.48510255440664485,
+    "logloss": 0.15858539547101186,
+    "calibration_l1_hist4096": 0.04649839273327962,
+    "count": 1500,
+    "positives": 53
+  },
+  "gauc_hist4096": 0.506407278358498,
+  "gauc_eligible_rows": 1230,
+  "clicked_impressions": 279,
+  "known_target_fraction": 1.0,
+  "retrieval_hit_at_k": 0.07885304659498207,
+  "retrieval_ndcg_at_k": 0.04066379587282844,
+  "candidate_recall": 0.2974910394265233,
+  "rerank_hit_at_k": 0.06810035842293907,
+  "rerank_ndcg_at_k": 0.03513775568281878,
+  "popularity_hit_at_k": 0.04659498207885305,
+  "clicked_log_dwell_mae": 0.9984470798123267
+}

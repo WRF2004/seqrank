@@ -1,0 +1,7 @@
+{
+  "scope": "in-process TestClient; CPU single request; 10 warmups",
+  "requests": 100,
+  "p50_ms": 7.476762500004952,
+  "p95_ms": 11.652593299987757,
+  "p99_ms": 12.921920809943686
+}

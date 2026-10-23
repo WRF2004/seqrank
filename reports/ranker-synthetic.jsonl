@@ -1,0 +1,3 @@
+{"epoch": 0, "stage": "ranker", "train_loss": 0.7642774942943028, "valid_loss": 0.6480733496348063, "seconds": 0.7773447399999895, "world_size": 1, "train_rows_including_sampler_padding": 7000}
+{"epoch": 1, "stage": "ranker", "train_loss": 0.6025800031934466, "valid_loss": 0.6198226222991944, "seconds": 1.0818186710000646, "world_size": 1, "train_rows_including_sampler_padding": 7000}
+{"epoch": 2, "stage": "ranker", "train_loss": 0.5825627260889326, "valid_loss": 0.6252592679659525, "seconds": 0.896184665000078, "world_size": 1, "train_rows_including_sampler_padding": 7000}
