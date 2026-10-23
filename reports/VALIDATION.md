@@ -29,11 +29,21 @@
 
 短训练合成实验中精排未超过召回排序，CTR AUC 接近随机。**本记录用于工程链路验收，不支持“效果提升”结论。**
 
+## GitHub CI 补充验收
+
+[Actions run 39933028074](https://github.com/WRF2004/seqrank/actions/runs/39933028074) 全部通过，验证源码提交 `787e293bc768177b4460bbab3b410ee7228da622`：
+
+- `ruff` 通过。
+- **12 tests passed**，包括本地受限而跳过的多 worker DataLoader。
+- 完整 `make demo` 通过。
+- 召回与精排各完成 **2 进程 CPU DDP / 3 epoch**，world_size=2；这不是多 GPU 验证。
+- 合成数据指标已作为 Actions artifact 上传。
+
 ## 未完成的验证
 
-- 双进程 torchrun 尝试因 host 网络隔离无法建立 rendezvous 连接，已停止；不能声称 DDP 实测通过。
+- 本地双进程 torchrun 因 host 网络隔离无法建立 rendezvous；后续已在 GitHub runner 完成 CPU DDP 验证。
 - 没有真实数据训练，没有 CUDA AMP / 多卡 / 大目录 ANN / 工业压测 / Docker runtime 验证。
 - 没有训练集之外的新物品冷启动能力，没有生产高可用部署。
-- CI 已提供，云端执行状态以 GitHub Actions 为准，不在此预先声明成功。
+- 上述代码提交的 CI 已成功；后续版本请查看对应 Actions 状态。
 
 复现依赖版本见 `environment.txt`。随机种子固定，但跨平台浮点与计时会变化。

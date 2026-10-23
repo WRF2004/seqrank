@@ -55,7 +55,7 @@ flowchart TD
 | 模型 | 因果不看未来、空历史、缺失标签、极端 logits |
 | 检索 | 分块 top-k 与 dense 一致、小目录 HNSW 一致、版本不匹配拒绝 |
 | 生命周期 | 训练→加载→评估→API、checkpoint 恢复入口、参数校验 |
-| 分布式 | 无重复验证 sampler 已测；通信执行待可用环境 |
+| 分布式 | 无重复验证 sampler 已测；GitHub CI 双进程 CPU DDP 已通过，GPU 待验证 |
 
 ## 面试表达与下一步
 
