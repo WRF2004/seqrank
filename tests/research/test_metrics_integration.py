@@ -56,6 +56,9 @@ def test_cpu_full_pipeline(prepared):
     config['watchtime']['mode']='cread_inspired'
     for stage in ('retrieval','ranking'):
         train(config,stage)
+    from seqrank.research.contracts import freeze
+    freeze(config)
+    for stage in ('retrieval','ranking'):
         for split in ('valid','test'):
             result=evaluate(config,stage,split)
             assert result['split']==split and result['stage']==stage

@@ -51,16 +51,13 @@ debug 默认 2% 用户（保留其全部输入事件）、max_len20、dim32、1 
 
 ```bash
 python -m seqrank.cli train-retrieval --config "$CONFIG"
-python -m seqrank.cli train-ranking --config "$CONFIG" --set watchtime.mode=cread_inspired
+python -m seqrank.cli train-ranking --config "$CONFIG"
 python -m seqrank.cli evaluate-retrieval --config "$CONFIG" --split valid
 python -m seqrank.cli evaluate-ranking --config "$CONFIG" --split valid
-python -m seqrank.cli evaluate-retrieval --config "$CONFIG" --split test
-python -m seqrank.cli evaluate-ranking --config "$CONFIG" --split test
-python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split test
 pip freeze > "$RUN_ROOT/environment.txt"
 ```
 
-评价阶段通过 checkpoint 恢复 CREAD-inspired 配置；无需重写评估 YAML。运行目录有输出则拒绝覆盖，重复评估选择新 evaluation.output。
+评价阶段恢复 checkpoint 的目标变换，但 YAML 的模型、任务和 watchtime 配置必须与训练一致；不一致直接拒绝。运行目录有输出则拒绝覆盖，重复评估选择新 evaluation.output。
 
 ## 4. 扩展到单 H200
 
@@ -69,8 +66,7 @@ pip freeze > "$RUN_ROOT/environment.txt"
 ```bash
 export RUN_ROOT=/work/$USER/seqrank/h200-run
 python -m seqrank.cli train-retrieval --config configs/h200.yaml
-python -m seqrank.cli train-ranking --config configs/h200.yaml --set watchtime.mode=cread_inspired
-python -m seqrank.cli evaluate-ranking --config configs/h200.yaml --split test
+python -m seqrank.cli train-ranking --config configs/h200.yaml
 python -m seqrank.cli diagnose-gradients --config configs/h200.yaml
 ```
 
@@ -114,3 +110,22 @@ API 示例：先 GET /health 取 dataset_version，然后 POST /recommend：
 可选双进程 CPU DDP 集成测试：`SEQRANK_DDP_TESTS=1 pytest -q tests/research/test_ddp.py`。普通 pytest 默认跳过这两个启动多进程的测试；测试代码仍是实际完整流程。
 
 默认 training.deterministic=true，启用 PyTorch deterministic algorithms、关闭 cuDNN benchmark 并在 CUDA 初始化前设置 CUBLAS_WORKSPACE_CONFIG（未被外部指定时）。遇不支持的确定性算子会报错；显式改为 false 后不应再宣称数值精确复现。跨硬件/驱动仍不保证逐 bit 一致。
+
+
+最终测试与调参分离：默认所有 evaluate 命令使用 valid；实验矩阵和 research_pipeline.sh 仅运行 valid。
+选定模型、任务权重、种子与候选协议后，才执行：
+
+```bash
+python -m seqrank.cli freeze-evaluation --config "$CONFIG"
+python -m seqrank.cli evaluate-retrieval --config "$CONFIG" --split test
+python -m seqrank.cli evaluate-ranking --config "$CONFIG" --split test
+python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split test
+```
+
+也可执行 `CONFIG=/path/to/selected.yaml bash scripts/research_final_test.sh`（需两个阶段 checkpoint）。
+矩阵中单个选定阶段可用其 resolved.json 冻结后单独评估，不会自动测试所有超参数。
+冻结文件拒绝覆盖；重复评估目录拒绝覆盖。这是防止意外误用的协议约束，不是防篡改安全系统。
+
+RAW_ROOT 指向解压后的 release 根目录，例如 `/datasets/KuaiRand-Pure`；默认日志匹配
+`$RAW_ROOT/data/log_standard*.csv`，内容文件也在 `data/` 下。如果你已经把 CSV 平铺，
+显式用 `--set 'adapter.sources=["/absolute/path/log_standard*.csv"]'` 覆盖，不自动回退到其他目录。

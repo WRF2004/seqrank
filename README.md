@@ -42,7 +42,7 @@ export CONFIG=configs/datasets/kuairand_debug.yaml
 bash scripts/research_pipeline.sh
 ```
 
-该脚本依次检查、转换、预处理、校验哈希、报告质量、训练两阶段模型、验证/测试、候选重排评估。输出目录必须是新的；重复执行时明确选取后续命令或更换输出目录，避免覆盖旧实验。
+该脚本依次检查、转换、预处理、校验哈希、报告质量、训练两阶段模型、仅验证集及候选重排评估。输出目录必须是新的；重复执行时明确选取后续命令或更换输出目录，避免覆盖旧实验。
 
 每一步也可独立执行：
 
@@ -54,11 +54,8 @@ python -m seqrank.cli verify-data --config "$CONFIG"
 python -m seqrank.cli quality --config "$CONFIG" --set quality.plots=true
 python -m seqrank.cli train-retrieval --config "$CONFIG"
 python -m seqrank.cli evaluate-retrieval --config "$CONFIG" --split valid
-python -m seqrank.cli evaluate-retrieval --config "$CONFIG" --split test
 python -m seqrank.cli train-ranking --config "$CONFIG"
 python -m seqrank.cli evaluate-ranking --config "$CONFIG" --split valid
-python -m seqrank.cli evaluate-ranking --config "$CONFIG" --split test
-python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split test
 ```
 
 默认使用训练日志流量 `log_standard*.csv`；随机曝光数据必须单独配置、单独预处理和报告，不自动生成 IPS。
@@ -69,9 +66,9 @@ python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split test
 export CUDA_VISIBLE_DEVICES=2   # 示例：调度器分配给你的物理卡，进程内对应 cuda:0
 # 已经准备好的数据可复用；以下配置不重新预处理
 python -m seqrank.cli train-retrieval --config configs/h200.yaml
-python -m seqrank.cli train-ranking --config configs/h200.yaml --set watchtime.mode=cread_inspired
+python -m seqrank.cli train-ranking --config configs/h200.yaml
 # 恢复时，保持原训练配置、world size 与总 epochs 不变
-python -m seqrank.cli train-ranking --config configs/h200.yaml --set watchtime.mode=cread_inspired \
+python -m seqrank.cli train-ranking --config configs/h200.yaml \
   --resume "$RUN_ROOT/ranking/last.pt"
 # 可选两卡；不会自动占满 8 卡
 GPU_IDS=2,3 NPROC=2 STAGE=ranking bash scripts/research_ddp.sh
@@ -122,3 +119,22 @@ pytest -q                    # 含旧兼容测试；本次均未运行
 旧 `demo-data / prepare / train / evaluate / build-index / serve` 保留，见 [v1 README](docs/LEGACY.md)。v2 使用独立 schema/checkpoint，不能混装。旧 KuaiRand 转换脚本现在要求 `--verified-click-semantics`；建议迁移到显式 tab 语义的 v2 adapter。v1 的常驻 CVR 头与融合逻辑仅保留兼容，不用于无转化标签的真实实验。
 
 限制：本地 SQLite 预处理与精确评估更重正确性而非集群吞吐；ItemKNN、全 embedding AdamW、全目录精确评估仍受单机内存限制。没有稀疏分布式 embedding、在线实验平台或严格 CWM 复现。不能由本项目离线指标推断在线 CTR、观看时长或因果收益。
+
+
+最终测试与调参分离：默认所有 evaluate 命令使用 valid；实验矩阵和 research_pipeline.sh 仅运行 valid。
+选定模型、任务权重、种子与候选协议后，才执行：
+
+```bash
+python -m seqrank.cli freeze-evaluation --config "$CONFIG"
+python -m seqrank.cli evaluate-retrieval --config "$CONFIG" --split test
+python -m seqrank.cli evaluate-ranking --config "$CONFIG" --split test
+python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split test
+```
+
+也可执行 `CONFIG=/path/to/selected.yaml bash scripts/research_final_test.sh`（需两个阶段 checkpoint）。
+矩阵中单个选定阶段可用其 resolved.json 冻结后单独评估，不会自动测试所有超参数。
+冻结文件拒绝覆盖；重复评估目录拒绝覆盖。这是防止意外误用的协议约束，不是防篡改安全系统。
+
+RAW_ROOT 指向解压后的 release 根目录，例如 `/datasets/KuaiRand-Pure`；默认日志匹配
+`$RAW_ROOT/data/log_standard*.csv`，内容文件也在 `data/` 下。如果你已经把 CSV 平铺，
+显式用 `--set 'adapter.sources=["/absolute/path/log_standard*.csv"]'` 覆盖，不自动回退到其他目录。

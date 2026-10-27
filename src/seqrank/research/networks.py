@@ -74,6 +74,9 @@ class RankingNetwork(nn.Module):
             raise ValueError('ESMM needs binary(click) and conversion together')
         if 'conversion' in self.tasks and not manifest['train_labels']['conversion']:
             raise ValueError('No observed conversion labels: disable conversion task')
+        for task,weight in config.get('fusion',{}).items():
+            if weight and task not in self.tasks:
+                raise ValueError(f'Fusion references disabled task: {task}')
         dim = config.get('dim',64)
         self.user = nn.Embedding(manifest['n_users'],dim,padding_idx=0)
         self.item = nn.Embedding(manifest['n_items'],dim,padding_idx=0)

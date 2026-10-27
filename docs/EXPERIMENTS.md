@@ -48,11 +48,31 @@ python -m seqrank.cli experiments --config configs/experiments/ablation.yaml \
 
 ```bash
 python -m seqrank.cli train-ranking --config configs/h200.yaml \
-  --set watchtime.mode=cread_inspired --set ranking.tasks.watch=0.3
+
 python -m seqrank.cli diagnose-gradients --config configs/h200.yaml
-python -m seqrank.cli evaluate-ranking --config configs/h200.yaml --split test
 ```
 
-评估从 checkpoint 恢复训练时 watch artifact 与网络配置，避免因评估 YAML 不同而改变目标还原。融合取 checkpoint 中 ranking.fusion；若想比较新融合权重，应单独构建可追溯实验而不是悄悄覆盖。
+评估从 checkpoint 恢复训练时 watch artifact 与网络配置，避免因评估 YAML 不同而改变目标还原。融合取 checkpoint 中 ranking.fusion，并校验当前 YAML 一致；若想比较新融合权重，应另建可追溯实验。
 
 `experiments` 不加 --execute 只写计划；加后按顺序执行所有种子，遇失败停止。不会自动跳过/覆盖已有训练目录；长矩阵中断后可用 resolved.json 对该 run 手工 train --resume，再独立评估，或缩小 variants 配置完成剩余。报告只接受实际 metrics.json。
+
+
+最终测试与调参分离：默认所有 evaluate 命令使用 valid；实验矩阵和 research_pipeline.sh 仅运行 valid。
+选定模型、任务权重、种子与候选协议后，才执行：
+
+```bash
+python -m seqrank.cli freeze-evaluation --config "$CONFIG"
+python -m seqrank.cli evaluate-retrieval --config "$CONFIG" --split test
+python -m seqrank.cli evaluate-ranking --config "$CONFIG" --split test
+python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split test
+```
+
+也可执行 `CONFIG=/path/to/selected.yaml bash scripts/research_final_test.sh`（需两个阶段 checkpoint）。
+矩阵中单个选定阶段可用其 resolved.json 冻结后单独评估，不会自动测试所有超参数。
+冻结文件拒绝覆盖；重复评估目录拒绝覆盖。这是防止意外误用的协议约束，不是防篡改安全系统。
+
+RAW_ROOT 指向解压后的 release 根目录，例如 `/datasets/KuaiRand-Pure`；默认日志匹配
+`$RAW_ROOT/data/log_standard*.csv`，内容文件也在 `data/` 下。如果你已经把 CSV 平铺，
+显式用 `--set 'adapter.sources=["/absolute/path/log_standard*.csv"]'` 覆盖，不自动回退到其他目录。
+
+所有用于训练的 --set 模型/任务/时长参数必须在评估、诊断、服务及冻结时保持一致。建议将选定参数写入独立 YAML；resolved.json 可直接作为 --config，避免遗漏覆盖项。

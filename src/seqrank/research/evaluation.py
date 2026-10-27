@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .config import empty_output, file_hash, write_json
+from .config import empty_output, file_hash, write_json, fingerprint
 from .dataset import ResearchDataset, load_artifacts
 from .features import candidate_batch, transform_batch
 from .metrics import MetricStore, RetrievalMetrics
@@ -41,22 +41,31 @@ def rerank(model,batch,items,catalog,statistics,spec,chunk=128):
 
 
 @torch.inference_mode()
-def evaluate(config,stage,split='test'):
+def evaluate(config,stage,split='valid'):
+    if stage not in {'retrieval','ranking','e2e'}:
+        raise ValueError('Unknown evaluation stage')
     if split not in {'valid','test'}:
         raise ValueError('Evaluation split must be valid or test')
     spec = config.get('evaluation',{})
     device = torch.device(spec.get('device','cpu'))
     manifest,statistics,catalog = load_artifacts(config['data']['prepared'])
     dataset = ResearchDataset(config['data']['prepared'],split)
-    output = empty_output(spec.get('output',str(Path(config['run']['output'])/'evaluation'))+f'/{stage}-{split}')
     path = checkpoint_path(config,'ranking' if stage=='ranking' else 'retrieval')
     model,state = load_checkpoint(path,device,manifest['fingerprint'])
+    from .contracts import check_configuration, require_final
+    check_configuration(config,state,manifest)
+    if split=='test':
+        require_final(config,manifest,state['stage'],path)
+    output = empty_output(str(spec.get('output',str(Path(config['run']['output'])/'evaluation')))+f'/{stage}-{split}')
     expected_stage = 'ranking' if stage=='ranking' else 'retrieval'
     if state['stage']!=expected_stage:
         raise ValueError('Incorrect checkpoint stage')
     result = {'stage':stage,'split':split,'dataset_hash':manifest['fingerprint'],
               'checkpoint_hash':file_hash(path),'config':config,'primary_label':manifest['primary_label'],
               'code_commit':state['code_commit'],'code_diff_hash':state.get('code_diff_hash'),'seed':state['config'].get('seed',42)}
+    from .contracts import evaluation_protocol
+    result['evaluation_protocol'] = evaluation_protocol(config)
+    result['evaluation_protocol_fingerprint'] = fingerprint(result['evaluation_protocol'])
     started = time.perf_counter()
     if stage=='ranking':
         store = MetricStore(output/'predictions.sqlite')
@@ -98,6 +107,9 @@ def evaluate(config,stage,split='test'):
         if stage=='e2e':
             rankpath = checkpoint_path(config,'ranking')
             ranking,rankstate = load_checkpoint(rankpath,device,manifest['fingerprint'])
+            check_configuration(config,rankstate,manifest)
+            if split=='test':
+                require_final(config,manifest,'ranking',rankpath)
             if rankstate['stage']!='ranking':
                 raise ValueError('Expected ranking checkpoint')
             result['ranking_checkpoint_hash'] = file_hash(rankpath)

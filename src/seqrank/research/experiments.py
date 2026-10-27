@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+from copy import deepcopy
 import glob
 import json
 from pathlib import Path
@@ -22,7 +23,7 @@ def matrix(config,execute=False):
         if '/' in name or '..' in name:
             raise ValueError('Variant names must be simple directory names')
         for seed in spec.get('seeds',[42]):
-            run=merge(base,change)
+            run=deepcopy(merge(base,change))
             run['seed']=int(seed)
             run['run']={'output':str(root/name/str(seed))}
             run.setdefault('evaluation',{})['output']=str(root/name/str(seed)/'evaluation')
@@ -39,7 +40,6 @@ def matrix(config,execute=False):
                 for stage in spec.get('stages',['ranking']):
                     train(run,stage)
                     evaluate(run,stage,'valid')
-                    evaluate(run,stage,'test')
     write_json(root/'plan.json',{'executed':execute,'configs':plans})
     return {'executed':execute,'configs':plans}
 
@@ -66,7 +66,7 @@ def report(config):
             raise ValueError(f'Not a measured result: {path}')
         run=row['config']
         variant=run.get('experiment',{}).get('variant',run['run']['output'])
-        identity=(variant,row['stage'],row['split'],row['dataset_hash'],row['protocol'])
+        identity=(variant,row['stage'],row['split'],row['dataset_hash'],row['protocol']+':'+row.get('evaluation_protocol_fingerprint','legacy-unbound'))
         duplicate=(identity,row['seed'])
         if duplicate in seen:
             raise ValueError(f'Duplicate seed/result: {path}')

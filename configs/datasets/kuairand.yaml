@@ -2,7 +2,7 @@ extends: ../research.yaml
 adapter:
   kind: kuairand
   version: auto
-  sources: ['${RAW_ROOT:-data/raw/KuaiRand-Pure}/log_standard*.csv']
+  sources: ['${RAW_ROOT:-data/raw/KuaiRand-Pure}/data/log_standard*.csv']
   output: ${DATA_ROOT:-data/kuairand}/normalized.csv
   primary_label: valid_play
   policy: standard
@@ -15,7 +15,7 @@ adapter:
   sample_seed: 42
 # Optional immutable content join (check fields and units in your release first):
 #  content:
-#    sources: ['${RAW_ROOT:-data/raw/KuaiRand-Pure}/video_features_basic*.csv']
+#    sources: ['${RAW_ROOT:-data/raw/KuaiRand-Pure}/data/video_features_basic*.csv']
 #    assert_immutable: true
 #    id_column: video_id
 #    duration_column: video_duration

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .config import load_config, file_hash
 
-COMMANDS = {'schema','convert','prepare-data','quality','verify-data','train-retrieval','train-ranking',
+COMMANDS = {'freeze-evaluation','schema','convert','prepare-data','quality','verify-data','train-retrieval','train-ranking',
             'evaluate-retrieval','evaluate-ranking','evaluate-e2e','build-ann','benchmark-ann',
             'diagnose-gradients','serve-research','benchmark','experiments','report'}
 
@@ -15,7 +15,7 @@ def main(argv=None):
     parser.add_argument('command',choices=sorted(COMMANDS))
     parser.add_argument('--config',required=True)
     parser.add_argument('--set',action='append',default=[],metavar='KEY=YAML_VALUE')
-    parser.add_argument('--split',choices=['valid','test'],default='test')
+    parser.add_argument('--split',choices=['valid','test'],default='valid')
     parser.add_argument('--resume')
     parser.add_argument('--execute',action='store_true',help='Execute experiment matrix; otherwise write resolved plan only')
     args=parser.parse_args(argv)
@@ -23,7 +23,10 @@ def main(argv=None):
     import torch
     torch.set_num_threads(int(config.get('threads',4)))
     cmd=args.command
-    if cmd in {'schema','convert'}:
+    if cmd=='freeze-evaluation':
+        from .contracts import freeze
+        result=freeze(config)
+    elif cmd in {'schema','convert'}:
         from .adapters import inspect,convert
         result=(inspect if cmd=='schema' else convert)(config)
     elif cmd=='prepare-data':

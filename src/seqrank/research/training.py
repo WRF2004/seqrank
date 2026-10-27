@@ -67,6 +67,12 @@ def load_checkpoint(path,device='cpu',dataset_hash=None):
         raise ValueError('Use legacy load_model for v1 checkpoints')
     if dataset_hash and state['manifest']['fingerprint']!=dataset_hash:
         raise ValueError('Checkpoint/dataset fingerprint mismatch')
+    if state.get('configuration_identity')!=configuration_identity(state['config']):
+        raise ValueError('Checkpoint configuration integrity mismatch')
+    identity=dict(state['manifest'])
+    expected=identity.pop('fingerprint')
+    if fingerprint(identity)!=expected:
+        raise ValueError('Checkpoint manifest integrity mismatch')
     if state.get('baseline'):
         return CatalogueBaseline(state['baseline']),state
     model = make_model(state['stage'],state['manifest'],state['config'],state.get('watch_artifact')).to(device)

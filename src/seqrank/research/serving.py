@@ -72,6 +72,9 @@ class Bundle:
         self.ranker,self.ranking_state = load_checkpoint(checkpoint_path(config,'ranking'),self.device,self.version)
         if self.retrieval_state['stage']!='retrieval' or self.ranking_state['stage']!='ranking':
             raise ValueError('Incorrect checkpoint stages')
+        from .contracts import check_configuration
+        check_configuration(config,self.retrieval_state,self.manifest)
+        check_configuration(config,self.ranking_state,self.manifest)
         self.model_versions = {stage:file_hash(checkpoint_path(config,stage)) for stage in ('retrieval','ranking')}
         ann_path = config.get('serving',{}).get('ann')
         self.ann = ANN(ann_path,self.model_versions['retrieval'],self.version,config.get('ann',{}).get('ef_search',128)) if ann_path else None

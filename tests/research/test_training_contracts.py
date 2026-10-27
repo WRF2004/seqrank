@@ -39,6 +39,7 @@ def test_accumulation_uses_valid_count(prepared):
 def test_task_disable_and_empty_masks(prepared):
     config=deepcopy(prepared)
     config['ranking']['tasks']={'binary':1,'conversion':0,'watch':0}
+    config['ranking']['fusion']={'binary':1}
     manifest,stats,_=load_artifacts(config['data']['prepared'])
     model=RankingNetwork(manifest,config['ranking'],None)
     data=ResearchDataset(config['data']['prepared'],'train')
@@ -90,3 +91,85 @@ def test_observed_watch_vs_conditional(prepared):
     assert masks(batch,config,'ranking')['watch'].sum()==0
     config['watchtime']['condition']='observed'
     assert masks(batch,config,'ranking')['watch'].sum()>0
+
+
+def test_disabled_fusion_is_rejected(prepared):
+    config=deepcopy(prepared)
+    config['ranking']['tasks']['watch']=0
+    manifest,_,_=load_artifacts(config['data']['prepared'])
+    import pytest
+    with pytest.raises(ValueError,match='disabled task'):
+        RankingNetwork(manifest,config['ranking'],None)
+
+
+def test_frozen_final_protocol(prepared):
+    from pathlib import Path
+    from seqrank.research.training import train
+    from seqrank.research.contracts import freeze, require_final, check_configuration
+    from seqrank.research.training import load_checkpoint
+    import pytest
+    prepared['training']['epochs']=1
+    train(prepared,'ranking')
+    manifest,_,_=load_artifacts(prepared['data']['prepared'])
+    path=Path(prepared['run']['output'])/'ranking/best.pt'
+    with pytest.raises(FileNotFoundError):
+        require_final(prepared,manifest,'ranking',path)
+    freeze(prepared)
+    require_final(prepared,manifest,'ranking',path)
+    wrong=deepcopy(prepared)
+    wrong['evaluation']['candidates']+=1
+    with pytest.raises(ValueError,match='protocol'):
+        require_final(wrong,manifest,'ranking',path)
+    _,state=load_checkpoint(path)
+    wrong=deepcopy(prepared)
+    wrong['data']['history_protocol']='frozen_train'
+    with pytest.raises(ValueError,match='protocol mismatch'):
+        check_configuration(wrong,state,manifest)
+    wrong=deepcopy(prepared)
+    wrong['ranking']['tasks']['watch']=0
+    with pytest.raises(ValueError,match='config mismatch'):
+        check_configuration(wrong,state,manifest)
+
+
+def test_official_release_layout(tmp_path):
+    from seqrank.research.config import load_config
+    from seqrank.research.adapters import inspect
+    from pathlib import Path
+    import pytest
+    root=tmp_path/'KuaiRand-Pure'
+    (root/'data').mkdir(parents=True)
+    (root/'data/log_standard_4_22_to_5_08_pure.csv').write_text('user_id,video_id,time_ms\n1,2,3\n')
+    config=load_config(Path(__file__).parents[2]/'configs/datasets/kuairand.yaml',
+                       [f'adapter.sources=["{root}/data/log_standard*.csv"]'])
+    assert len(inspect(config)['files'])==1
+    config['adapter']['sources']=[str(root/'log_standard*.csv')]
+    with pytest.raises(FileNotFoundError):
+        inspect(config)
+
+
+def test_matrix_never_evaluates_test(prepared,tmp_path,monkeypatch):
+    import json
+    import seqrank.research.experiments as experiments
+    base=tmp_path/'base.json'
+    base.write_text(json.dumps(prepared))
+    calls=[]
+    monkeypatch.setattr(experiments,'train',lambda *args:None)
+    monkeypatch.setattr(experiments,'evaluate',lambda config,stage,split:calls.append(split))
+    experiments.matrix({'experiments':{'base':str(base),'output':str(tmp_path/'matrix'),
+        'variants':{'a':{},'b':{}},'seeds':[42,43],'stages':['ranking']}},execute=True)
+    assert calls==['valid']*4
+
+
+def test_missing_duration_candidate_filter(prepared):
+    from seqrank.research.evaluation import rerank
+    config=deepcopy(prepared)
+    config['watchtime']['mode']='normalized'
+    manifest,stats,catalog=load_artifacts(config['data']['prepared'])
+    data=ResearchDataset(config['data']['prepared'],'train')
+    model=RankingNetwork(manifest,config['ranking'],fit_watchtime(data,config['watchtime'])).eval()
+    batch=next(iter(loader(data,config)))
+    catalog=dict(catalog)
+    import numpy as np
+    catalog['duration']=np.full(manifest['n_items'],-1,dtype=np.float32)
+    scores=rerank(model,batch,torch.full((len(batch['item']),1),2),catalog,stats,config['ranking'])
+    assert torch.isneginf(scores).all()

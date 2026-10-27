@@ -11,3 +11,5 @@
 真实实验表由 `seqrank.cli report` 从实际 metrics.json 生成；不要在执行前填写模型优劣结论。
 
 静态检查：已用 Python AST 解析源码/测试/脚本，解析 YAML 并检查 extends 文件存在，核对文档 CLI 名称，执行 git diff --check。均未导入/执行项目模块。这些检查只能排除部分语法、引用与空白问题，不等价于测试通过。
+
+后续修订：默认官方 release/data 路径；调参仅 valid，最终 test 要求显式 freeze-evaluation；冻结数据/权重/候选协议并拒绝漂移；检查 checkpoint 配置、特征统计和训练时长变换；补充对应回归测试。仍仅静态解析，测试与实验未执行。

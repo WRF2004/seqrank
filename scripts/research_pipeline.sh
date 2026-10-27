@@ -15,6 +15,5 @@ python -m seqrank.cli quality --config "$CONFIG"
 for stage in retrieval ranking; do
   python -m seqrank.cli "train-$stage" --config "$CONFIG"
   python -m seqrank.cli "evaluate-$stage" --config "$CONFIG" --split valid
-  python -m seqrank.cli "evaluate-$stage" --config "$CONFIG" --split test
 done
-python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split test
+python -m seqrank.cli evaluate-e2e --config "$CONFIG" --split valid
