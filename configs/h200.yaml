@@ -1,0 +1,5 @@
+extends: datasets/kuairand.yaml
+# One process, one explicitly selected visible GPU. Start small on shared hardware.
+training: {device: cuda:0, precision: bf16, batch_size: 256, workers: 4, accumulation: 2}
+evaluation: {device: cuda:0}
+serving: {device: cuda:0}

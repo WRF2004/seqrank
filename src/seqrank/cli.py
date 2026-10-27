@@ -10,6 +10,10 @@ from .engine import evaluate, load_model, sha256, train
 
 
 def main():
+    import sys
+    from .research.cli import COMMANDS, main as research_main
+    if len(sys.argv)>1 and sys.argv[1] in COMMANDS:
+        return research_main(sys.argv[1:])
     parser = argparse.ArgumentParser(description="SeqRank two-stage recommendation")
     parser.add_argument("--threads", type=int, default=4, help="PyTorch CPU threads per process")
     sub = parser.add_subparsers(dest="command", required=True)

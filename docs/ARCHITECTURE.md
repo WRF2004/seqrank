@@ -1,65 +1,44 @@
-# 架构与设计取舍
+# v2 架构与数据流
+
+v2 采用 `seqrank.research` 命名空间，避免破坏原有 `data.py/models.py` 的导入与旧 checkpoint。v1 架构原文保存在 `ARCHITECTURE_V1.md`，其中历史测试结论不适用于 v2。
 
 ```mermaid
 flowchart TD
-  A[曝光日志] --> B[时间切分与训练期词表]
-  B --> C[NPY 分片与 mmap]
-  C --> D[因果 Transformer 召回训练]
-  C --> E[DIN + MMoE 精排训练]
-  D --> F[物品向量与 HNSW 索引]
-  G[请求历史] --> H[序列用户向量]
-  D --> H
-  H --> F
-  F --> I[候选物品]
-  E --> J[CTR / CTCVR / log-dwell]
-  I --> J
-  J --> K[融合排序与 raw ID 返回]
+  A[原始日志与不可变内容] --> B[Adapter 语义与单位校验]
+  B --> C[SQLite 时间排序与训练词表]
+  C --> D[延迟反馈历史与训练统计]
+  D --> E[NPY 分片及版本清单]
+  E --> F[召回模型训练]
+  E --> G[精排与时长训练]
+  F --> H[全目录或 ANN 候选]
+  G --> I[共享特征与候选重排]
+  H --> I
+  E --> J[真实曝光预测评测]
+  G --> J
+  I --> K[代理评测与批量 API]
 ```
 
-## 数据与泄漏
+| 文件 | 职责 | 重要依赖 |
+|---|---|---|
+| adapters.py | CSV/Parquet、KuaiRand、可选不可变内容 SQLite join | 不依赖模型 |
+| dataset.py | global split、词表、历史、NPY、manifest | adapters、features、旧 mmap Dataset |
+| features.py | 同一 dense 特征、标准化、候选展开 | numpy/torch |
+| networks.py / retrievers.py | 神经模型、稀疏基线、检索与索引 | 旧 BOS SequenceEncoder |
+| watchtime.py / objectives.py | train-only 目标变换、所有 loss numerator/count | 模型无数据加载逻辑 |
+| training.py | CPU/DDP/AMP/累积、验证选模、epoch 恢复 | objectives |
+| metrics.py / evaluation.py | 磁盘精确排序与三种评测协议 | serving 与其共用 rerank |
+| serving.py | 请求校验、raw ID lookup、batch predict/recommend | features、evaluation、load_checkpoint |
+| diagnostics.py / experiments.py | 无污染梯度诊断、矩阵与结果汇总 | 正常训练/评估入口 |
 
-全局时间切分而非逐用户 leave-one-out，避免训练集看到其他用户未来的信息。训练期曝光拟合词表，对未知物品不利用测试期目录。时间相同的用户行为批次先输出样本、下一时间再合入历史。验证/测试采用事件时序更新历史，但不反向传播。
+离线单曝光和 `/predict` 使用请求中的 duration/category；候选生成和 `/recommend` 使用训练目录中最早曝光记录的内容快照。两类问题都复用相同计算函数，不能将未知候选的事后标签或未来 metadata 加入特征。若内容属性可变，需要上游时点 join；当前不可变内容 join 要求显式确认。
 
-该实现只记录 item 点击序列；没有行为类型、间隔时间、类别或内容编码，没有 point-in-time 特征库。加入新的业务特征时必须保证事件时间可用性。
+## 资源边界
 
-## 损失
+- 数据转换流式读取，内容 join/事件排序在 SQLite；预处理缓冲最多三个 shard。每条记录存 item/watch/duration/time 四条历史，存储约 O(NL)。慢磁盘、SQLite 排序临时空间会成为瓶颈。
+- mmap 按需打开最多 8 个 shard，继承 v1 worker-safe reopen。`DistributedSampler` 仍维护 O(N) 索引，并为各 rank 等长补齐少量重复训练样本；验证不补齐、不重复。
+- 神经 embedding、优化器与 DDP 都是全量副本，未做 embedding sharding。AdamW 为 dense 参数更新；大词表内存成本很高。
+- 精确 Top-K 分块但总计算量仍随目录线性增长。默认不屏蔽已看物品，允许重复消费；开启 exclude_seen 会改变评测目标覆盖。
+- ItemKNN 保存正样本 user-item 边、稀疏相似度，分块降低中间矩阵大小；仍不保证亿级内存可承受。
+- serving 重用历史 embedding 后按候选块计算目标注意力。显式批量接口最多 64 请求；无动态 batching/鉴权/分布式特征服务。HNSW 使用 CPU，包含设备向量搬运。
 
-召回使用当前点击为正样本，对每个曝光采样 K 个不同于目标的均匀负例（允许负例重复）。这是二元 logistic 损失，不是 sampled-softmax，也没有全量 softmax 的无偏估计保证。历史点击可能再次被推荐，不作为永久排除项。未点击曝光不贡献召回损失。
-
-精排输入 `[user, target, interest, target*interest]`。每个任务通过自己的 softmax 门控加权共享专家，三个 tower 输出 CTR logit、CVR logit 和非负 log-dwell。
-
-`L = BCE(click, CTR) + λc * masked_BCE(conversion, CTR*CVR) + λd * masked_Huber(log1p(dwell), predicted_log_dwell)`。
-
-未知标签为 -1；dwell 只在点击曝光上监督。所有 loss 均以曝光 batch 大小为分母，因此辅助任务权重也受有效标签率影响；这是为了让 DDP 每个 rank 的固定 batch 梯度平均与全局样本加权一致。验证最后一个不满 batch 按样本数加权。
-
-联合概率的 log-loss 在 log 域计算，避免直接相乘后下溢；在极端置信度处截断，确保数值有限。
-
-## 大规模机制与实际瓶颈
-
-- SQLite 使用磁盘排序，预处理不把全部曝光日志放入 Python 列表；NPY shard buffer 内存受 shard_size 和 max_len 控制。
-- 单条历史使用固定长度数组，空间约 `N*(8L+36)` 字节，千万曝光、L=200 约 16.36GB，不含数据库/排序临时空间。
-- mmap 按需读，进程缓存最多 8 个分片；分片过碎加随机访问会降低吞吐，需按存储系统实测调整。
-- PyTorch RandomSampler / DistributedSampler 的索引排列仍是 O(N) 内存；亿级数据应替换为分片级/块级 shuffle iterable pipeline。
-- 精确检索分块避免 B×全目录分数矩阵，分数内存 O(B*chunk)，算力仍 O(B*I*d)。模型物品 embedding 仍需完整驻留。
-- FAISS HNSW 减少在线检索计算；索引是 RAM 常驻，非分布式向量库；更新模型后必须重建，不能混用旧索引。
-- DDP 复制完整 embedding/优化器，**不是** embedding 参数分片。千万级用户/物品请评估每张卡内存；进一步使用 TorchRec/FSDP/参数服务器需另行实现。
-- Transformer attention 为 O(L²)；当前不是超长序列线性注意力模型。
-- FastAPI 为同步单请求推理，没有动态 batching、请求队列、缓存或自动降级。benchmark 是进程内 TestClient 延迟，不是生产 HTTP QPS。
-- 只有 SQLite ID mapping；不包含 Kafka/Flink/Redis 在线特征服务，历史由调用方提供。
-
-## 验证矩阵
-
-| 验证 | 覆盖 |
-|---|---|
-| 时间切分 | 同时间戳隔离、未知物品、训练期词表 |
-| 模型 | 因果不看未来、空历史、缺失标签、极端 logits |
-| 检索 | 分块 top-k 与 dense 一致、小目录 HNSW 一致、版本不匹配拒绝 |
-| 生命周期 | 训练→加载→评估→API、checkpoint 恢复入口、参数校验 |
-| 分布式 | 无重复验证 sampler 已测；GitHub CI 双进程 CPU DDP 已通过，GPU 待验证 |
-
-## 面试表达与下一步
-
-可陈述“实现了带时间隔离、分片读取、序列召回、MMoE 多任务精排和在线 API 的可复现推荐工程”。
-在真实实验完成前不能陈述“支撑亿级数据/百万 QPS/CTR 提升 X%”。要补齐的实验是：真实数据切分统计、多 seed 主表、消融、训练显存与吞吐、ANN 准确率/延迟权衡、冷用户与新物品分群结果。
-
-可深入讨论：为什么不能用负采样 CTR 当真实 CTR、精排无法找回召回漏掉的目标、ESMM 为什么不用只在点击集上训练 CVR、辅助目标缺失如何屏蔽、DDP 梯度的分母如何一致、时间切分和 rolling-history 的评估含义。
+checkpoint 绑定数据 manifest fingerprint；manifest 绑定配置、原始文件 hash、词表/特征/目录 hash 和 shard hash。`verify-data` 额外扫描全量 shards；正常加载检查目录/词表等资产。ANN 绑定 checkpoint bytes hash、dataset hash、metric/dim/offset、index bytes hash。模型更新后必须重建。

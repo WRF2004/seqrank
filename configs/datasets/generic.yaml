@@ -1,0 +1,16 @@
+extends: ../research.yaml
+adapter:
+  kind: generic
+  sources: ['${RAW_ROOT:-data/raw}/events.csv']
+  output: ${DATA_ROOT:-data/generic}/normalized.csv
+  timestamp_unit: ms
+  loop_policy: keep
+  outlier_policy: error
+  max_watch_seconds: 86400
+  feedback_delay_ms: 0
+  primary_label: click
+data:
+  source: ${DATA_ROOT:-data/generic}/normalized.csv
+  prepared: ${DATA_ROOT:-data/generic}/prepared
+  primary_label: click
+watchtime: {condition: click}

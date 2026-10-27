@@ -1,0 +1,2 @@
+extends: ../datasets/kuairand.yaml
+watchtime: {mode: cread_inspired, bins: 32, ead_beta: 100, restore_weight: 1, ordinal_weight: 0.1}

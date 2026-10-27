@@ -1,0 +1,16 @@
+extends: research.yaml
+# Only tests write this deterministic synthetic input. No real-data command falls back to it.
+data:
+  source: data/smoke/normalized.csv
+  prepared: data/smoke/prepared
+  primary_label: click
+  train_end: 200000
+  valid_end: 300000
+  max_len: 4
+  shard_size: 32
+run: {output: runs/smoke}
+training: {epochs: 2, batch_size: 8, workers: 0}
+retrieval: {dim: 8, heads: 2, layers: 1, negatives: 2, dropout: 0.0}
+ranking: {dim: 8, hidden: 16, experts: 2, dropout: 0.0}
+watchtime: {condition: click, bins: 4, fit_samples: 100}
+evaluation: {output: runs/smoke/evaluation, ks: [1, 3], candidates: 4}

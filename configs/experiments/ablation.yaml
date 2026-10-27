@@ -1,0 +1,46 @@
+experiments:
+  base: configs/h200.yaml
+  output: ${EXPERIMENT_ROOT:-runs/ablation}
+  seeds: [42, 43, 44]
+  stages: [ranking]
+  variants:
+    binary_only:
+      ranking:
+        model: dnn
+        attention: false
+        tasks: {binary: 1, conversion: 0, watch: 0}
+        fusion: {binary: 1, conversion: 0, watch: 0}
+    din_only:
+      ranking:
+        model: din
+        tasks: {binary: 1, conversion: 0, watch: 0}
+        fusion: {binary: 1, conversion: 0, watch: 0}
+    dwell_only:
+      ranking:
+        model: dnn
+        attention: false
+        tasks: {binary: 0, conversion: 0, watch: 1}
+        fusion: {binary: 0, conversion: 0, watch: 1}
+    shared_bottom:
+      ranking: {model: shared_bottom}
+    mmoe_log:
+      ranking: {model: mmoe}
+    mmoe_raw:
+      watchtime: {mode: raw}
+    mmoe_normalized:
+      watchtime: {mode: normalized}
+    mmoe_bucket:
+      watchtime: {mode: bucket}
+    mmoe_cread:
+      watchtime: {mode: cread_inspired}
+    mmoe_duration_conditioned:
+      watchtime: {mode: duration_conditioned}
+    mmoe_no_attention:
+      ranking: {attention: false}
+    cread_no_ordinal:
+      watchtime: {mode: cread_inspired, ordinal_weight: 0}
+    cread_no_restoration:
+      watchtime: {mode: cread_inspired, restore_weight: 0}
+report:
+  sources: ['${EXPERIMENT_ROOT:-runs/ablation}/**/evaluation/*/metrics.json']
+  output: ${EXPERIMENT_ROOT:-runs/ablation}/report

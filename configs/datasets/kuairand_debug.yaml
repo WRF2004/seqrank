@@ -1,0 +1,13 @@
+extends: kuairand.yaml
+adapter:
+  user_sample_fraction: 0.02
+# Deterministic whole-user sampling keeps each retained user's complete input timeline.
+# Pure already has an incomplete corpus timeline; see DATASET.md.
+training:
+  epochs: 1
+  batch_size: 32
+retrieval: {dim: 32, layers: 1, negatives: 16}
+ranking: {dim: 32, hidden: 64, experts: 2}
+data: {max_len: 20}
+watchtime: {fit_samples: 20000, bins: 16}
+evaluation: {ks: [10, 20], candidates: 20, catalog_chunk: 2048, candidate_chunk: 20}

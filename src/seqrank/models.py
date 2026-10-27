@@ -113,7 +113,10 @@ class Ranker(nn.Module):
 
 
 def rank_loss(output, batch, conversion_weight=1.0, dwell_weight=0.1):
-    click = F.binary_cross_entropy_with_logits(output["ctr_logit"], batch["click"])
+    click_values = F.binary_cross_entropy_with_logits(
+        output["ctr_logit"], batch["click"].clamp_min(0), reduction="none"
+    )
+    click = (click_values * (batch["click"] >= 0)).mean()
     # Stable log(sigmoid(CTR)*sigmoid(CVR)) in fp32, including under autocast.
     log_joint = F.logsigmoid(output["ctr_logit"].float()) + F.logsigmoid(output["cvr_logit"].float())
     log_joint = log_joint.clamp_max(-1e-7)

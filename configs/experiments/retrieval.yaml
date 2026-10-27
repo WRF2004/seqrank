@@ -1,0 +1,19 @@
+experiments:
+  base: configs/h200.yaml
+  output: ${EXPERIMENT_ROOT:-runs/retrieval-comparison}
+  seeds: [42, 43, 44]
+  stages: [retrieval]
+  variants:
+    popularity:
+      retrieval: {model: popularity}
+    itemknn:
+      retrieval: {model: itemknn, knn_neighbors: 100, knn_block: 128}
+    gru4rec:
+      retrieval: {model: gru4rec}
+    sasrec:
+      retrieval: {model: sasrec}
+    sasrec_popularity_sampling:
+      retrieval: {model: sasrec, sampler: popularity}
+report:
+  sources: ['${EXPERIMENT_ROOT:-runs/retrieval-comparison}/**/evaluation/*/metrics.json']
+  output: ${EXPERIMENT_ROOT:-runs/retrieval-comparison}/report

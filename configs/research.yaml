@@ -1,0 +1,82 @@
+seed: 42
+threads: 4
+data:
+  source: ${DATA_ROOT:-data/kuairand}/normalized.csv
+  prepared: ${DATA_ROOT:-data/kuairand}/prepared
+  primary_label: valid_play
+  train_end: '2022-04-22T00:00:00+08:00'
+  valid_end: '2022-05-01T00:00:00+08:00'
+  max_len: 50
+  shard_size: 50000
+  history_protocol: rolling
+  missing_primary: error
+  duplicates: drop_exact
+run:
+  output: ${RUN_ROOT:-runs/research}
+training:
+  deterministic: true
+  device: cpu
+  precision: fp32
+  batch_size: 128
+  epochs: 5
+  workers: 0
+  lr: 0.001
+  weight_decay: 0.0001
+  accumulation: 1
+  grad_clip: 5
+  warmup_steps: 0
+retrieval:
+  model: sasrec
+  dim: 64
+  heads: 2
+  layers: 2
+  dropout: 0.1
+  loss: sampled_binary
+  sampler: uniform
+  popularity_power: 0.75
+  negatives: 64
+ranking:
+  model: mmoe
+  dim: 64
+  hidden: 128
+  experts: 4
+  dropout: 0.1
+  attention: true
+  tasks: {binary: 1.0, conversion: 0.0, watch: 1.0}
+  fusion: {binary: 1.0, conversion: 0.0, watch: 0.01}
+watchtime:
+  mode: log1p
+  condition: observed
+  cap_seconds: 3600
+  bins: 32
+  fit_samples: 200000
+  ead_beta: 100
+  restore_weight: 1
+  ordinal_weight: 0.1
+evaluation:
+  device: cpu
+  output: ${RUN_ROOT:-runs/research}/evaluation
+  ks: [10, 50, 100]
+  candidates: 100
+  catalog_chunk: 4096
+  candidate_chunk: 32
+  exclude_seen: false
+  tail_quantile: 0.8
+quality:
+  output: ${DATA_ROOT:-data/kuairand}/quality
+  sample_size: 100000
+  plots: false
+ann:
+  path: ${RUN_ROOT:-runs/research}/retrieval/hnsw.faiss
+  m: 32
+  ef_construction: 200
+  ef_search: 128
+  k: 100
+  benchmark_batches: 20
+serving:
+  device: cpu
+  host: 127.0.0.1
+  port: 8000
+benchmark:
+  batches: 20
+  candidates: 100

@@ -1,0 +1,3 @@
+extends: h200.yaml
+# GPU count is chosen by torchrun --nproc_per_node, never inferred from all visible cards.
+training: {batch_size: 128, workers: 2, accumulation: 2}

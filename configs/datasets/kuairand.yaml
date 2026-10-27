@@ -1,0 +1,23 @@
+extends: ../research.yaml
+adapter:
+  kind: kuairand
+  version: auto
+  sources: ['${RAW_ROOT:-data/raw/KuaiRand-Pure}/log_standard*.csv']
+  output: ${DATA_ROOT:-data/kuairand}/normalized.csv
+  primary_label: valid_play
+  policy: standard
+  tab_semantics: {}
+  loop_policy: keep
+  outlier_policy: error
+  max_watch_seconds: 86400
+  feedback_delay_ms: 0
+  user_sample_fraction: 1.0
+  sample_seed: 42
+# Optional immutable content join (check fields and units in your release first):
+#  content:
+#    sources: ['${RAW_ROOT:-data/raw/KuaiRand-Pure}/video_features_basic*.csv']
+#    assert_immutable: true
+#    id_column: video_id
+#    duration_column: video_duration
+#    duration_unit: ms
+#    category_column: tag

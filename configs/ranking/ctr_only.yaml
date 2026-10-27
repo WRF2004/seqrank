@@ -1,0 +1,7 @@
+extends: ../datasets/generic.yaml
+# Requires real click labels. For KuaiRand, provide verified adapter.tab_semantics + tabs.
+ranking:
+  model: dnn
+  attention: false
+  tasks: {binary: 1.0, conversion: 0.0, watch: 0.0}
+  fusion: {binary: 1.0, conversion: 0.0, watch: 0.0}
